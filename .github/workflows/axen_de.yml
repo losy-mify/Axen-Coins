@@ -4,8 +4,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  run_axen_de:
+  Renew-bot:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    
     steps:
       - name: 📥 下载私库脚本
         uses: actions/checkout@v4
@@ -68,3 +72,18 @@ jobs:
         with:
           name: debug-screenshots
           path: "*.png"
+
+      - name: 🧹 清理旧的工作流运行记录
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs=$(gh run list --workflow="${{ github.workflow }}" --limit=100 --json databaseId --jq '.[].databaseId')
+          count=0
+          for run_id in $runs; do
+            count=$((count + 1))
+            if [ $count -gt 1 ]; then
+              echo "删除运行记录: $run_id"
+              gh run delete $run_id || true
+            fi
+          done
