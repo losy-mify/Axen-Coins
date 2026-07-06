@@ -28,7 +28,7 @@ jobs:
       - name: ⚙ 设置代理 (sing-box)
         if: ${{ env.NODE_LINK != '' }}
         env:
-          NODE_LINK: ${{ secrets.NODE_LINK }}
+          NODE_LINK: ${{ secrets.US_PROXY }}
         run: |
           bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
           echo "✅ 代理状态: $IS_PROXY"
