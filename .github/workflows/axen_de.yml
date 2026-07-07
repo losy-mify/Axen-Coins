@@ -32,8 +32,6 @@ jobs:
           NODE_LINK: ${{ secrets.DE_PROXY }}
         run: |
           bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
-          echo "✅ 代理状态: $IS_PROXY"
-          echo "✅ 代理地址: $PROXY_SERVER"
 
       - name: 🛠️ 安装系统依赖
         run: |
