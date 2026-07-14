@@ -1,14 +1,14 @@
 name: Axen-US
 on:
   workflow_dispatch:
-  
+
 jobs:
   Renew-bot:
     runs-on: ubuntu-latest
     permissions:
       actions: write
       contents: read
-    
+
     steps:
       - name: 📥 下载私库脚本
         uses: actions/checkout@v4
@@ -16,25 +16,65 @@ jobs:
           repository: ${{ github.repository_owner }}/Axen-Coins-Private
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
-          
+
       - name: 📂 移动脚本到工作目录
         run: mv private/axen_coins.py axen_coins.py
-        
+
       - name: 🐍 设置 Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-          
+
       - name: ⚙ 设置代理 (sing-box)
-        if: ${{ env.NODE_LINK != '' }}
+        id: singbox
         env:
           NODE_LINK: ${{ secrets.US_PROXY }}
         run: |
           bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
-          echo "✅ 代理状态: $IS_PROXY"
-          echo "✅ 代理地址: $PROXY_SERVER"
-          
+
+      - name: ⚠️ 代理失败写回 Cron 1分钟后重试
+        if: ${{ failure() && steps.singbox.outcome == 'failure' }}
+        env:
+          CRON_JOB: ${{ secrets.US_CRON }}
+          TG_BOT: ${{ secrets.TG_BOT }}
+        run: |
+          python3 - <<'EOF'
+          import os, json, urllib.request, urllib.parse, datetime
+          from datetime import timedelta
+
+          cron_job = os.environ.get("CRON_JOB", "")
+          if cron_job and "," in cron_job:
+              api_key, job_id = [x.strip() for x in cron_job.split(",", 1)]
+              next_run = datetime.datetime.utcnow() + timedelta(hours=8, minutes=1)
+              data = {"job": {"schedule": {
+                  "timezone": "Asia/Shanghai", "expiresAt": 0,
+                  "hours": [next_run.hour], "minutes": [next_run.minute],
+                  "mdays": [-1], "months": [-1], "wdays": [-1],
+              }}}
+              payload = json.dumps(data).encode()
+              req = urllib.request.Request(
+                  f"https://api.cron-job.org/jobs/{job_id}",
+                  data=payload,
+                  headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                  method="PATCH"
+              )
+              urllib.request.urlopen(req, timeout=15)
+              print(f"🔁 代理失败，已写回Cron：{next_run.hour:02d}:{next_run.minute:02d} 重试")
+
+          tg_bot = os.environ.get("TG_BOT", "")
+          if tg_bot and "," in tg_bot:
+              chat_id, token = [x.strip() for x in tg_bot.split(",", 1)]
+              msg = "⚠️ Axen US 代理启动失败，已安排1分钟后重试"
+              urllib.request.urlopen(
+                  f"https://api.telegram.org/bot{token}/sendMessage",
+                  data=urllib.parse.urlencode({"chat_id": chat_id, "text": msg}).encode(),
+                  timeout=10
+              )
+              print("📨 TG 推送成功")
+          EOF
+
       - name: 🛠️ 安装系统依赖
+        if: ${{ steps.singbox.outcome == 'success' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -43,29 +83,30 @@ jobs:
             x11-utils \
             xdotool \
             scrot
-            
+
       - name: 🐍 安装 Python 依赖
+        if: ${{ steps.singbox.outcome == 'success' }}
         run: |
           pip install seleniumbase
           seleniumbase install chromedriver
-          
+
       - name: 🚀 运行脚本
+        if: ${{ steps.singbox.outcome == 'success' }}
         env:
           PYTHONIOENCODING: utf-8
           AXEN_ACCOUNT: ${{ secrets.US_ACCOUNT }}
-          PROXY_SERVER: http://127.0.0.1:1081
           TG_BOT: ${{ secrets.TG_BOT }}
           CRON_JOB: ${{ secrets.US_CRON }}
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python axen_coins.py
-          
+
       - name: 📸 上传截图
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: debug-screenshots
           path: "*.png"
-          
+
       - name: 🧹 清理旧的工作流运行记录
         if: always()
         env:
