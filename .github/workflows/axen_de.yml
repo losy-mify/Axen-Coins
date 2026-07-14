@@ -25,24 +25,14 @@ jobs:
           python-version: '3.10'
 
       - name: ⚙ 设置代理 (sing-box)
+        id: singbox
         env:
           NODE_LINK: ${{ secrets.DE_PROXY }}
         run: |
           bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
 
-      - name: 🔍 验证代理连通性
-        id: proxy_check
-        run: |
-          if curl -s --max-time 10 -x http://127.0.0.1:1081 https://api.ipify.org | grep -qE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
-            echo "PROXY_OK=true" >> $GITHUB_ENV
-            echo "✅ 代理连通性验证成功"
-          else
-            echo "PROXY_OK=false" >> $GITHUB_ENV
-            echo "❌ 代理连通性验证失败"
-          fi
-
       - name: ⚠️ 代理失败写回 Cron 1分钟后重试
-        if: ${{ env.PROXY_OK == 'false' }}
+        if: ${{ failure() && steps.singbox.outcome == 'failure' }}
         env:
           CRON_JOB: ${{ secrets.DE_CRON }}
           TG_BOT: ${{ secrets.TG_BOT }}
@@ -83,7 +73,7 @@ jobs:
           EOF
 
       - name: 🛠️ 安装系统依赖
-        if: ${{ env.PROXY_OK == 'true' }}
+        if: ${{ steps.singbox.outcome == 'success' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -94,13 +84,13 @@ jobs:
             scrot
 
       - name: 🐍 安装 Python 依赖
-        if: ${{ env.PROXY_OK == 'true' }}
+        if: ${{ steps.singbox.outcome == 'success' }}
         run: |
           pip install seleniumbase
           seleniumbase install chromedriver
 
       - name: 🚀 运行脚本
-        if: ${{ env.PROXY_OK == 'true' }}
+        if: ${{ steps.singbox.outcome == 'success' }}
         env:
           PYTHONIOENCODING: utf-8
           AXEN_ACCOUNT: ${{ secrets.DE_ACCOUNT }}
