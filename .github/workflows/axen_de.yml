@@ -29,48 +29,15 @@ jobs:
         env:
           NODE_LINK: ${{ secrets.DE_PROXY }}
         run: |
-          bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
-
-      - name: ⚠️ 代理失败写回 Cron 1分钟后重试
-        if: ${{ failure() && steps.singbox.outcome == 'failure' }}
-        env:
-          CRON_JOB: ${{ secrets.DE_CRON }}
-          TG_BOT: ${{ secrets.TG_BOT }}
-        run: |
-          python3 - <<'EOF'
-          import os, json, urllib.request, urllib.parse, datetime
-          from datetime import timedelta
-
-          cron_job = os.environ.get("CRON_JOB", "")
-          if cron_job and "," in cron_job:
-              api_key, job_id = [x.strip() for x in cron_job.split(",", 1)]
-              next_run = datetime.datetime.utcnow() + timedelta(hours=8, minutes=1)
-              data = {"job": {"schedule": {
-                  "timezone": "Asia/Shanghai", "expiresAt": 0,
-                  "hours": [next_run.hour], "minutes": [next_run.minute],
-                  "mdays": [-1], "months": [-1], "wdays": [-1],
-              }}}
-              payload = json.dumps(data).encode()
-              req = urllib.request.Request(
-                  f"https://api.cron-job.org/jobs/{job_id}",
-                  data=payload,
-                  headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                  method="PATCH"
-              )
-              urllib.request.urlopen(req, timeout=15)
-              print(f"🔁 代理失败，已写回Cron：{next_run.hour:02d}:{next_run.minute:02d} 重试")
-
-          tg_bot = os.environ.get("TG_BOT", "")
-          if tg_bot and "," in tg_bot:
-              chat_id, token = [x.strip() for x in tg_bot.split(",", 1)]
-              msg = "⚠️ Axen DE 代理启动失败，已安排1分钟后重试"
-              urllib.request.urlopen(
-                  f"https://api.telegram.org/bot{token}/sendMessage",
-                  data=urllib.parse.urlencode({"chat_id": chat_id, "text": msg}).encode(),
-                  timeout=10
-              )
-              print("📨 TG 推送成功")
-          EOF
+          # bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
+          ATTEMPTS=("🔌 启动代理..." "🔄 二启动代理..." "🆘 三启代理...")
+          FAILURES=("❌ 启动失败" "❌ 二启失败" "💀 三启失败")
+          for i in 0 1 2; do
+            echo "${ATTEMPTS[$i]}"
+            bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh) && exit 0
+            echo "${FAILURES[$i]}"
+          done
+          exit 1
 
       - name: 🛠️ 安装系统依赖
         if: ${{ steps.singbox.outcome == 'success' }}
