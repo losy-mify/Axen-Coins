@@ -29,13 +29,16 @@ jobs:
         env:
           NODE_LINK: ${{ secrets.DE_PROXY }}
         run: |
-          # bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
           ATTEMPTS=("🔌 启动代理..." "🔄 二启动代理..." "🆘 三启代理...")
           FAILURES=("❌ 启动失败" "❌ 二启失败" "💀 三启失败")
           for i in 0 1 2; do
             echo "${ATTEMPTS[$i]}"
-            bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh) && exit 0
+            if (bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)); then
+              exit 0
+            fi
             echo "${FAILURES[$i]}"
+            pkill -f sing-box 2>/dev/null || true
+            sleep 3
           done
           exit 1
 
